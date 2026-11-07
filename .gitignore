@@ -1,0 +1,47 @@
+# Python virtual environment dan cache
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# ESP-IDF hasil kompilasi dan komponen terkelola
+**/build/
+esp32_firmware/managed_components/
+
+# Konfigurasi ESP-IDF lokal
+esp32_firmware/sdkconfig*
+bukti_hqc5/sdkconfig*
+
+# Kredensial Wi-Fi dan konfigurasi lokal
+esp32_firmware/main/wifi_config.h
+
+# Library eksternal hasil clone
+liboqs-src/
+
+# Backup dan file sementara
+backup_final/
+*.bak*
+*.backup*
+*.old
+*.before_*
+*.energi*_ok
+*.diag_*
+*.noina_diag
+*.stack_besar_ok
+
+# Log dan database pengujian
+*.log
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Hasil analisis otomatis (akan dipilih kembali setelah audit)
+analysis/analysis_output*/
+
+# File sistem dan editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

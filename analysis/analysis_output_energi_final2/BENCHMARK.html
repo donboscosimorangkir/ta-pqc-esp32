@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benchmark PQC pada ESP32-WROOM-32</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--ink:#1d2421;--mut:#68716c;--line:#e2e0d8;--a:#1F5C4F;--b:#C2410C}
+@media(prefers-color-scheme:dark){:root{--bg:#141816;--card:#1d2321;--ink:#e8ece9;--mut:#9aa5a0;--line:#2e3633;--a:#4FB89E;--b:#F08A5D}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 18px 60px}
+h1{font:700 27px Georgia,serif;margin:0 0 4px}
+h2{font:700 17px Georgia,serif;margin:0 0 4px}
+.sub,.mut{color:var(--mut)}
+.sub{margin:0 0 16px}
+.hint{color:var(--mut);font-size:13.5px;margin:0 0 10px}
+.banner{background:#fff4d6;color:#5a4300;border:1px solid #e8cf87;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.card b{display:block;font-size:23px}.card span{color:var(--mut);font-size:13px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+details.panel summary{cursor:pointer;font-weight:600}
+details.panel ul{margin:10px 0 0}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:transparent;color:var(--ink);padding:8px 16px;border-radius:999px;cursor:pointer;font:inherit}
+.tab.on{background:var(--a);border-color:var(--a);color:#fff}
+.ctrl{display:flex;gap:14px 18px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+select,.btn{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.btn{cursor:pointer}.btn:hover{border-color:var(--a)}
+.right{margin-left:auto}
+.tag{font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.legend{display:flex;gap:18px;margin:6px 0;font-size:14px}
+.legend i,.dot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--mut);font-size:12px}
+svg .val{fill:var(--ink);font-weight:600}
+svg .lbl{fill:var(--ink)}
+.hov{cursor:pointer}.hov:hover{opacity:.75}
+#tip{position:fixed;pointer-events:none;background:#1d2421;color:#fff;font-size:13px;padding:8px 11px;border-radius:8px;display:none;z-index:9;line-height:1.5}
+.cmpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+.cmp{border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.cmp .lv{display:block;color:var(--mut);font-size:12.5px}
+.cmp b{display:block;font:700 26px Georgia,serif}
+.cmp span.tx{font-size:13.5px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{color:var(--mut);font-weight:600}
+td:first-child{font-family:ui-monospace,Consolas,monospace}
+</style></head><body><div class="wrap">
+<h1>Benchmark PQC pada ESP32-WROOM-32</h1>
+<p class="sub">ML-KEM vs HQC (key establishment) dan ML-DSA vs SLH-DSA (digital signature).</p>
+<div id="banner"></div>
+<div class="cards" id="cards"></div>
+<details class="panel"><summary>Cara membaca halaman ini</summary>
+<ul>
+<li><b>Batang</b> = nilai tiap algoritma. Hijau dan oranye adalah dua keluarga yang dibandingkan pada tingkat keamanan setara.</li>
+<li><b>Garis hitam di batang</b> = sebaran data. Pada mode <i>Rata-rata ± std</i> garis menunjukkan simpangan baku; pada mode <i>Median</i> garis menunjukkan nilai terkecil sampai terbesar.</li>
+<li><b>Skala logaritmik</b> membuat batang yang sangat kecil tetap terlihat saat ada yang ratusan kali lebih besar. Tiap garis kisi bernilai 10× garis di bawahnya.</li>
+<li><b>Arahkan kursor</b> ke batang atau titik untuk melihat angka lengkapnya.</li>
+<li><b>Median</b> lebih tahan terhadap satu trial yang tiba-tiba lambat (misalnya trial pertama), jadi cocok bila rata-rata terasa tidak mewakili.</li>
+</ul></details>
+<div class="panel">
+  <div class="tabs" id="tabs"></div>
+  <div class="ctrl">
+    <label>Metrik <select id="metric"></select></label>
+    <label>Statistik <select id="mode"><option value="mean">Rata-rata ± std</option><option value="median">Median &amp; rentang min–maks</option></select></label>
+    <label><input type="checkbox" id="log"> Skala logaritmik</label>
+    <span class="tag" id="where"></span>
+    <button class="btn right" id="csv">Unduh CSV</button>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div id="enote"></div>
+  <div id="chart"></div>
+  <div class="cmpgrid" id="cmp"></div>
+</div>
+<div class="panel"><h2>Sebaran tiap trial</h2>
+  <p class="hint">Satu titik = satu trial. Garis pendek menandai median. Berguna untuk melihat apakah hasilnya konsisten atau ada trial yang menyimpang.</p>
+  <div id="strip"></div></div>
+<div class="panel"><h2>Trade-off: waktu komputasi vs data yang dikirim</h2>
+  <p class="hint" id="scNote"></p>
+  <div id="scatter"></div></div>
+<div class="panel"><h2>Tabel detail</h2><div class="scroll"><table id="tbl"></table></div></div>
+<p class="mut" style="font-size:13px">Dibuat otomatis: <span id="gen"></span></p>
+</div><div id="tip"></div>
+<script>
+const D = {"algos": {"ML-KEM-512": {"family": "ML-KEM", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 230.4611, "median": 230.338, "std": 0.9315855599758692, "min": 229.112, "max": 232.191, "raw": [232.191, 229.112, 230.308, 229.77, 230.379, 231.462, 230.161, 231.263, 230.368, 229.597]}, "encaps_time_ms": {"n": 10, "mean": 237.0558, "median": 237.0695, "std": 0.7370436139665548, "min": 235.842, "max": 238.212, "raw": [236.243, 238.212, 236.775, 236.494, 237.067, 237.412, 237.801, 237.64, 237.072, 235.842]}, "server_encaps_time_ms": {"n": 10, "mean": 0.49267000000000005, "median": 0.12365, "std": 1.2365071433949206, "min": 0.0429, "max": 4.0099, "raw": [4.0099, 0.1342, 0.1235, 0.1195, 0.1238, 0.0461, 0.1404, 0.141, 0.0454, 0.0429]}, "decaps_time_ms": {"n": 10, "mean": 289.6549, "median": 289.908, "std": 0.8549838789903098, "min": 288.422, "max": 290.933, "raw": [290.088, 288.995, 290.457, 288.422, 290.229, 288.458, 289.994, 290.933, 289.822, 289.151]}, "network_rtt_ms": {"n": 10, "mean": 1092.0151, "median": 1007.3389999999999, "std": 326.4815640095165, "min": 859.538, "max": 2009.497, "raw": [1052.238, 1016.462, 973.859, 1002.906, 1010.712, 1003.966, 859.538, 969.961, 1021.012, 2009.497]}, "pk_size_bytes": {"n": 10, "mean": 800.0, "median": 800.0, "std": 0.0, "min": 800.0, "max": 800.0, "raw": [800.0, 800.0, 800.0, 800.0, 800.0, 800.0, 800.0, 800.0, 800.0, 800.0]}, "ct_size_bytes": {"n": 10, "mean": 768.0, "median": 768.0, "std": 0.0, "min": 768.0, "max": 768.0, "raw": [768.0, 768.0, 768.0, 768.0, 768.0, 768.0, 768.0, 768.0, 768.0, 768.0]}, "ss_size_bytes": {"n": 10, "mean": 32.0, "median": 32.0, "std": 0.0, "min": 32.0, "max": 32.0, "raw": [32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0]}, "heap_keygen_used": {"n": 10, "mean": -91.6, "median": -422.0, "std": 982.7118035766584, "min": -432.0, "max": 2700.0, "raw": [-416.0, -420.0, -420.0, -424.0, -424.0, -232.0, -424.0, -432.0, -424.0, 2700.0]}, "heap_decaps_used": {"n": 10, "mean": 0.0, "median": 0.0, "std": 92.39528607504221, "min": -196.0, "max": 196.0, "raw": [0.0, 0.0, 0.0, 0.0, 0.0, -196.0, 0.0, 0.0, 196.0, 0.0]}, "heap_encaps_used": {"n": 10, "mean": -196.8, "median": -196.0, "std": 2.5298221281347035, "min": -204.0, "max": -196.0, "raw": [-204.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 13.949039990323405, "median": 14.374619644618988, "std": 1.6996679299982382, "min": 9.8444299929871, "max": 15.628024755038439, "raw": [9.8444, 12.4448, 13.8821, 14.5339, 13.9444, 15.3969, 15.0666, 15.628, 14.2845, 14.4647]}, "net_energy_encaps_mj": {"n": 10, "mean": 14.461830692956472, "median": 14.69497412491475, "std": 0.8358715933829418, "min": 12.557184181105924, "max": 15.26501956880233, "raw": [12.5572, 13.6911, 15.1747, 14.6231, 14.7669, 14.8086, 15.183, 15.265, 14.4787, 14.0701]}, "net_energy_decaps_mj": {"n": 10, "mean": 17.92216959463343, "median": 18.23562312801188, "std": 0.8633351109528586, "min": 15.844144468637296, "max": 18.773589251473936, "raw": [15.8441, 17.0178, 18.0168, 17.9861, 18.7736, 18.2538, 18.3345, 18.2174, 18.514, 18.2634]}}}, "HQC-1": {"family": "HQC", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 490.3783, "median": 490.26300000000003, "std": 0.4672111228698814, "min": 489.879, "max": 491.297, "raw": [490.619, 489.914, 491.013, 490.058, 490.214, 489.879, 490.312, 490.134, 490.343, 491.297]}, "encaps_time_ms": {"n": 10, "mean": 957.3869000000001, "median": 957.3605, "std": 0.9702138882168505, "min": 956.134, "max": 958.973, "raw": [957.952, 958.973, 956.959, 956.316, 958.056, 956.134, 956.539, 956.768, 958.41, 957.762]}, "server_encaps_time_ms": {"n": 10, "mean": 6.02899, "median": 6.05125, "std": 2.4647822425565757, "min": 2.4279, "max": 10.3483, "raw": [10.3483, 2.6919, 5.247, 6.1108, 9.3164, 6.483, 5.5132, 5.9917, 2.4279, 6.1597]}, "decaps_time_ms": {"n": 10, "mean": 1559.9114, "median": 1559.542, "std": 1.5867398582558656, "min": 1558.436, "max": 1563.93, "raw": [1558.85, 1558.436, 1559.297, 1563.93, 1559.787, 1558.948, 1560.709, 1560.219, 1558.851, 1560.087]}, "network_rtt_ms": {"n": 10, "mean": 3101.8473000000004, "median": 3093.4660000000003, "std": 26.978210837843072, "min": 3061.013, "max": 3158.068, "raw": [3090.858, 3089.349, 3085.127, 3096.074, 3126.346, 3158.068, 3120.953, 3061.013, 3088.92, 3101.765]}, "pk_size_bytes": {"n": 10, "mean": 2241.0, "median": 2241.0, "std": 0.0, "min": 2241.0, "max": 2241.0, "raw": [2241.0, 2241.0, 2241.0, 2241.0, 2241.0, 2241.0, 2241.0, 2241.0, 2241.0, 2241.0]}, "ct_size_bytes": {"n": 10, "mean": 4433.0, "median": 4433.0, "std": 0.0, "min": 4433.0, "max": 4433.0, "raw": [4433.0, 4433.0, 4433.0, 4433.0, 4433.0, 4433.0, 4433.0, 4433.0, 4433.0, 4433.0]}, "ss_size_bytes": {"n": 10, "mean": 32.0, "median": 32.0, "std": 0.0, "min": 32.0, "max": 32.0, "raw": [32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0]}, "heap_keygen_used": {"n": 10, "mean": 6630.0, "median": 5696.0, "std": 1507.5646291655662, "min": 5692.0, "max": 8816.0, "raw": [5696.0, 8816.0, 8816.0, 5696.0, 5696.0, 5692.0, 8812.0, 5692.0, 5692.0, 5692.0]}, "heap_decaps_used": {"n": 10, "mean": 582.4, "median": 736.0, "std": 824.0716257974451, "min": -1732.0, "max": 1120.0, "raw": [1120.0, 728.0, 932.0, -1732.0, 736.0, 924.0, 924.0, 728.0, 736.0, 728.0]}, "heap_encaps_used": {"n": 10, "mean": -196.0, "median": -196.0, "std": 0.0, "min": -196.0, "max": -196.0, "raw": [-196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 42.7060597984913, "median": 42.59635911030341, "std": 1.2821061428913696, "min": 41.1381986709411, "max": 45.07286380654995, "raw": [41.1382, 42.8123, 45.0729, 43.2073, 41.3657, 41.2331, 42.3804, 42.3627, 43.9959, 43.4922]}, "net_energy_encaps_mj": {"n": 10, "mean": 84.73015567346235, "median": 84.5326786750561, "std": 3.313624786032365, "min": 80.61671643402974, "max": 92.39275646212286, "raw": [84.1437, 86.0017, 86.1608, 80.6167, 80.8644, 82.7776, 84.3865, 85.2785, 84.6789, 92.3928]}, "net_energy_decaps_mj": {"n": 10, "mean": 132.9806720590255, "median": 131.29118659799582, "std": 4.338793270746934, "min": 126.48572086025763, "max": 140.060292387523, "raw": [130.4348, 131.7732, 137.8203, 130.7362, 126.4857, 129.2227, 130.8091, 136.8405, 135.6238, 140.0603]}}}, "ML-KEM-768": {"family": "ML-KEM", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 381.1295, "median": 381.3315, "std": 0.7112852607936055, "min": 379.919, "max": 382.154, "raw": [381.512, 380.516, 379.919, 380.789, 381.415, 381.248, 381.944, 381.416, 380.382, 382.154]}, "encaps_time_ms": {"n": 10, "mean": 386.4904, "median": 380.387, "std": 14.106380157771016, "min": 378.606, "max": 413.437, "raw": [380.551, 380.477, 413.437, 379.684, 378.606, 380.403, 378.873, 413.011, 380.371, 379.491]}, "server_encaps_time_ms": {"n": 10, "mean": 0.16643000000000002, "median": 0.14279999999999998, "std": 0.07774229579550347, "min": 0.058, "max": 0.3304, "raw": [0.3304, 0.1414, 0.2753, 0.1404, 0.1456, 0.1469, 0.1422, 0.1407, 0.058, 0.1434]}, "decaps_time_ms": {"n": 10, "mean": 457.42600000000004, "median": 457.30150000000003, "std": 1.6617486773476429, "min": 454.927, "max": 461.176, "raw": [461.176, 454.927, 456.418, 458.853, 457.463, 457.219, 457.302, 457.301, 456.237, 457.364]}, "network_rtt_ms": {"n": 10, "mean": 1467.8777, "median": 1490.513, "std": 69.00533351375415, "min": 1334.327, "max": 1541.447, "raw": [1334.327, 1497.74, 1541.447, 1477.049, 1502.063, 1483.286, 1519.848, 1355.835, 1456.414, 1510.768]}, "pk_size_bytes": {"n": 10, "mean": 1184.0, "median": 1184.0, "std": 0.0, "min": 1184.0, "max": 1184.0, "raw": [1184.0, 1184.0, 1184.0, 1184.0, 1184.0, 1184.0, 1184.0, 1184.0, 1184.0, 1184.0]}, "ct_size_bytes": {"n": 10, "mean": 1088.0, "median": 1088.0, "std": 0.0, "min": 1088.0, "max": 1088.0, "raw": [1088.0, 1088.0, 1088.0, 1088.0, 1088.0, 1088.0, 1088.0, 1088.0, 1088.0, 1088.0]}, "ss_size_bytes": {"n": 10, "mean": 32.0, "median": 32.0, "std": 0.0, "min": 32.0, "max": 32.0, "raw": [32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0]}, "heap_keygen_used": {"n": 10, "mean": 1096.4, "median": 1076.0, "std": 141.66564705515432, "min": 900.0, "max": 1468.0, "raw": [1076.0, 1076.0, 1076.0, 1468.0, 1076.0, 1076.0, 900.0, 1076.0, 1076.0, 1064.0]}, "heap_decaps_used": {"n": 10, "mean": -39.2, "median": 0.0, "std": 82.64085618573364, "min": -196.0, "max": 0.0, "raw": [0.0, -196.0, 0.0, -196.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, "heap_encaps_used": {"n": 10, "mean": -196.0, "median": -196.0, "std": 0.0, "min": -196.0, "max": -196.0, "raw": [-196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 14.301713680149529, "median": 14.367108472663048, "std": 0.6747218289923443, "min": 13.222770724942734, "max": 15.431480482445522, "raw": [14.734, 13.3075, 14.3108, 14.8603, 14.1884, 14.5335, 14.4234, 13.2228, 14.0051, 15.4315]}, "net_energy_encaps_mj": {"n": 10, "mean": 14.447526900667308, "median": 14.25179333825966, "std": 0.8842486243386328, "min": 13.154470238039778, "max": 16.071168589600973, "raw": [15.1478, 15.1907, 16.0712, 13.984, 14.2889, 13.6685, 13.1545, 15.0002, 13.7549, 14.2147]}, "net_energy_decaps_mj": {"n": 10, "mean": 17.248717088987355, "median": 16.87613796624484, "std": 1.099634320544705, "min": 15.81008645970229, "max": 19.10370669065378, "raw": [19.0704, 17.686, 16.8102, 19.1037, 17.4097, 16.8781, 16.8741, 16.4455, 15.8101, 16.3993]}}}, "HQC-3": {"family": "HQC", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 1256.4758, "median": 1256.2375, "std": 1.3647804707473334, "min": 1254.484, "max": 1258.668, "raw": [1255.818, 1254.484, 1256.657, 1255.403, 1255.779, 1255.156, 1257.322, 1258.668, 1257.377, 1258.094]}, "encaps_time_ms": {"n": 10, "mean": 2505.2673, "median": 2504.533, "std": 2.023164960045382, "min": 2502.416, "max": 2507.765, "raw": [2504.477, 2503.156, 2504.096, 2504.589, 2503.953, 2502.416, 2507.538, 2507.765, 2507.157, 2507.526]}, "server_encaps_time_ms": {"n": 10, "mean": 12.704609999999999, "median": 11.01365, "std": 3.160520605304695, "min": 9.8901, "max": 18.0575, "raw": [9.8901, 18.0575, 16.7791, 16.842, 11.3223, 10.9059, 10.7656, 10.7259, 11.1214, 10.6363]}, "decaps_time_ms": {"n": 10, "mean": 4020.0046, "median": 4018.6095, "std": 4.0873576142376375, "min": 4015.684, "max": 4025.711, "raw": [4015.801, 4015.684, 4018.064, 4016.917, 4016.26, 4019.155, 4023.802, 4025.711, 4025.233, 4023.419]}, "network_rtt_ms": {"n": 10, "mean": 8117.286900000001, "median": 7917.5025000000005, "std": 632.3036746981367, "min": 7885.134, "max": 9914.557, "raw": [7937.535, 7896.413, 7889.646, 7885.134, 7928.432, 9914.557, 7886.279, 7942.387, 7906.573, 7985.913]}, "pk_size_bytes": {"n": 10, "mean": 4514.0, "median": 4514.0, "std": 0.0, "min": 4514.0, "max": 4514.0, "raw": [4514.0, 4514.0, 4514.0, 4514.0, 4514.0, 4514.0, 4514.0, 4514.0, 4514.0, 4514.0]}, "ct_size_bytes": {"n": 10, "mean": 8978.0, "median": 8978.0, "std": 0.0, "min": 8978.0, "max": 8978.0, "raw": [8978.0, 8978.0, 8978.0, 8978.0, 8978.0, 8978.0, 8978.0, 8978.0, 8978.0, 8978.0]}, "ss_size_bytes": {"n": 10, "mean": 32.0, "median": 32.0, "std": 0.0, "min": 32.0, "max": 32.0, "raw": [32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0]}, "heap_keygen_used": {"n": 10, "mean": 14798.4, "median": 14780.0, "std": 61.01948686917793, "min": 14776.0, "max": 14972.0, "raw": [14780.0, 14780.0, 14780.0, 14780.0, 14780.0, 14780.0, 14780.0, 14776.0, 14972.0, 14776.0]}, "heap_decaps_used": {"n": 10, "mean": 3744.0, "median": 4036.0, "std": 819.6671411141368, "min": 2244.0, "max": 4544.0, "raw": [3752.0, 4144.0, 3948.0, 3956.0, 2244.0, 4340.0, 4116.0, 4152.0, 2244.0, 4544.0]}, "heap_encaps_used": {"n": 10, "mean": -196.0, "median": -196.0, "std": 0.0, "min": -196.0, "max": -196.0, "raw": [-196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 127.59722851669252, "median": 128.4700012446193, "std": 4.218001049169093, "min": 119.47012580718945, "max": 132.94944129726878, "raw": [119.4701, 123.3881, 126.9466, 124.1499, 128.6598, 129.2368, 132.3115, 130.5798, 132.9494, 128.2802]}, "net_energy_encaps_mj": {"n": 10, "mean": 258.64208255833535, "median": 258.9972238704919, "std": 5.756626878023689, "min": 248.89790768203488, "max": 268.87656653973636, "raw": [248.8979, 254.4497, 254.1617, 257.1572, 260.8373, 262.6341, 262.6386, 268.8766, 261.6885, 255.0794]}, "net_energy_decaps_mj": {"n": 10, "mean": 403.0652697709647, "median": 405.9702676046054, "std": 10.555974191360107, "min": 387.81403392089214, "max": 414.22673580246783, "raw": [390.9786, 395.5419, 391.489, 387.814, 406.86, 412.6077, 413.7291, 414.2267, 412.3251, 405.0806]}}}, "ML-KEM-1024": {"family": "ML-KEM", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 584.7967, "median": 584.6365, "std": 1.1637335557974104, "min": 583.143, "max": 587.12, "raw": [583.143, 584.31, 585.212, 587.12, 583.528, 584.963, 584.26, 584.252, 585.3, 585.879]}, "encaps_time_ms": {"n": 10, "mean": 592.3031, "median": 592.3209999999999, "std": 1.495144545223338, "min": 589.268, "max": 594.644, "raw": [592.95, 589.268, 591.996, 591.463, 591.343, 593.876, 591.845, 592.646, 593.0, 594.644]}, "server_encaps_time_ms": {"n": 10, "mean": 0.17941000000000001, "median": 0.1504, "std": 0.05709743037611723, "min": 0.13, "max": 0.2991, "raw": [0.2991, 0.1419, 0.2271, 0.1528, 0.1507, 0.1501, 0.13, 0.1486, 0.2466, 0.1472]}, "decaps_time_ms": {"n": 10, "mean": 698.49, "median": 698.864, "std": 1.9694687382923983, "min": 693.988, "max": 700.619, "raw": [699.588, 693.988, 700.356, 699.08, 697.577, 700.619, 697.975, 699.939, 697.13, 698.648]}, "network_rtt_ms": {"n": 10, "mean": 2116.1055, "median": 1963.5665, "std": 363.49879918653863, "min": 1902.941, "max": 3101.386, "raw": [1982.452, 2120.799, 2122.963, 2222.134, 1944.681, 1916.64, 1902.941, 1938.486, 1908.573, 3101.386]}, "pk_size_bytes": {"n": 10, "mean": 1568.0, "median": 1568.0, "std": 0.0, "min": 1568.0, "max": 1568.0, "raw": [1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0]}, "ct_size_bytes": {"n": 10, "mean": 1568.0, "median": 1568.0, "std": 0.0, "min": 1568.0, "max": 1568.0, "raw": [1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0, 1568.0]}, "ss_size_bytes": {"n": 10, "mean": 32.0, "median": 32.0, "std": 0.0, "min": 32.0, "max": 32.0, "raw": [32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0, 32.0]}, "heap_keygen_used": {"n": 10, "mean": 3677.2, "median": 2740.0, "std": 1553.4827395958482, "min": 2544.0, "max": 6056.0, "raw": [2752.0, 2544.0, 5860.0, 2740.0, 5860.0, 2740.0, 2740.0, 6056.0, 2740.0, 2740.0]}, "heap_decaps_used": {"n": 10, "mean": 94.0, "median": 212.0, "std": 910.9160224740807, "min": -2124.0, "max": 1592.0, "raw": [344.0, 80.0, 80.0, -2124.0, 64.0, -132.0, 344.0, 348.0, 1592.0, 344.0]}, "heap_encaps_used": {"n": 10, "mean": -176.4, "median": -196.0, "std": 61.98064213930024, "min": -196.0, "max": 0.0, "raw": [0.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0, -196.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 25.67958378889952, "median": 26.914219750364367, "std": 2.2768648290026414, "min": 22.820076185609423, "max": 27.974189521098765, "raw": [22.8201, 22.9991, 23.548, 22.9303, 26.7689, 27.0595, 27.3303, 27.9742, 27.891, 27.4745]}, "net_energy_encaps_mj": {"n": 10, "mean": 26.009273826682907, "median": 27.437157741204004, "std": 2.3994578939970252, "min": 22.679090919783846, "max": 28.7213840361232, "raw": [22.7659, 23.3342, 24.4569, 22.6791, 27.5899, 27.7919, 28.7214, 27.5713, 27.8791, 27.3031]}, "net_energy_decaps_mj": {"n": 10, "mean": 32.06954800624426, "median": 33.46170999838523, "std": 2.5652846104613385, "min": 27.650032169937276, "max": 35.04046933861224, "raw": [30.508, 27.65, 29.7564, 29.0986, 33.6222, 33.4832, 34.3065, 35.0405, 33.4402, 33.7899]}}}, "ML-DSA-44": {"family": "ML-DSA", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 897.2284999999999, "median": 903.3969999999999, "std": 14.841890791869394, "min": 868.809, "max": 908.087, "raw": [868.809, 908.087, 900.386, 902.386, 903.462, 905.732, 903.332, 904.043, 906.136, 869.912]}, "sign_time_ms": {"n": 10, "mean": 1566.1091000000001, "median": 1542.2615, "std": 517.3256521078059, "min": 946.183, "max": 2375.96, "raw": [1421.86, 1421.482, 2138.369, 946.183, 2375.96, 1899.452, 946.254, 947.75, 1662.663, 1901.118]}, "verify_time_ms": {"n": 10, "mean": 849.6274999999999, "median": 849.5685000000001, "std": 0.9037411441090382, "min": 848.301, "max": 851.776, "raw": [849.317, 848.301, 849.81, 848.792, 849.454, 849.922, 851.776, 849.522, 849.766, 849.615]}, "server_verify_time_ms": {"n": 10, "mean": 0.14531, "median": 0.15355000000000002, "std": 0.06063817004714659, "min": 0.0405, "max": 0.2385, "raw": [0.1645, 0.1924, 0.1442, 0.1559, 0.1433, 0.2385, 0.176, 0.1512, 0.0466, 0.0405]}, "network_rtt_ms": {"n": 10, "mean": 3490.0989999999997, "median": 3563.6295, "std": 506.4414614016774, "min": 2750.828, "max": 4174.978, "raw": [3191.001, 3219.765, 3935.576, 2752.351, 4174.978, 3698.685, 4050.547, 2750.828, 3465.956, 3661.303]}, "pk_size_bytes": {"n": 10, "mean": 1312.0, "median": 1312.0, "std": 0.0, "min": 1312.0, "max": 1312.0, "raw": [1312.0, 1312.0, 1312.0, 1312.0, 1312.0, 1312.0, 1312.0, 1312.0, 1312.0, 1312.0]}, "sig_size_bytes": {"n": 10, "mean": 2420.0, "median": 2420.0, "std": 0.0, "min": 2420.0, "max": 2420.0, "raw": [2420.0, 2420.0, 2420.0, 2420.0, 2420.0, 2420.0, 2420.0, 2420.0, 2420.0, 2420.0]}, "heap_keygen_used": {"n": 10, "mean": 6400.0, "median": 6400.0, "std": 0.0, "min": 6400.0, "max": 6400.0, "raw": [6400.0, 6400.0, 6400.0, 6400.0, 6400.0, 6400.0, 6400.0, 6400.0, 6400.0, 6400.0]}, "heap_sign_used": {"n": 10, "mean": 0.0, "median": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "raw": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 39.983386360296755, "median": 40.25715371719889, "std": 1.0437226045794679, "min": 38.3514776716421, "max": 41.524658117291324, "raw": [38.7048, 41.5247, 40.1978, 38.9396, 40.3165, 39.5855, 40.8023, 40.7839, 40.6274, 38.3515]}, "net_energy_sign_mj": {"n": 10, "mean": 70.18587683735431, "median": 68.97827605056506, "std": 23.09759345121023, "min": 41.7490422014913, "max": 106.90594690334615, "raw": [63.6812, 62.9138, 95.2657, 42.391, 106.9059, 85.4503, 44.1696, 41.749, 74.2754, 85.0569]}, "net_energy_verify_mj": {"n": 10, "mean": 36.99518211178963, "median": 37.33991256641315, "std": 0.6790578989569163, "min": 36.04117302883344, "max": 37.67448917698857, "raw": [36.0812, 36.0467, 36.0412, 36.903, 37.293, 37.4734, 37.6745, 37.3868, 37.5441, 37.5079]}}}, "ML-DSA-87": {"family": "ML-DSA", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 2445.0987, "median": 2447.6679999999997, "std": 10.840837063314567, "min": 2415.365, "max": 2453.679, "raw": [2453.679, 2450.488, 2444.712, 2415.365, 2449.394, 2445.942, 2450.068, 2445.452, 2450.25, 2445.637]}, "sign_time_ms": {"n": 10, "mean": 3654.6934, "median": 3208.088, "std": 1205.4384242048109, "min": 2458.345, "max": 6200.663, "raw": [2835.097, 6200.663, 2831.404, 2458.345, 3581.079, 2830.726, 5070.505, 4322.723, 3583.119, 2833.273]}, "verify_time_ms": {"n": 10, "mean": 2297.1175, "median": 2297.0965, "std": 1.0296266043786866, "min": 2295.844, "max": 2299.221, "raw": [2297.855, 2299.221, 2297.672, 2297.519, 2295.844, 2296.011, 2297.491, 2296.418, 2296.442, 2296.702]}, "server_verify_time_ms": {"n": 10, "mean": 0.33802, "median": 0.27990000000000004, "std": 0.16818064890666423, "min": 0.1878, "max": 0.7181, "raw": [0.7181, 0.4105, 0.2947, 0.2453, 0.1878, 0.526, 0.2651, 0.2235, 0.2092, 0.3]}, "network_rtt_ms": {"n": 10, "mean": 8494.151300000001, "median": 8031.611500000001, "std": 1213.0553651107648, "min": 7231.843, "max": 11003.73, "raw": [7689.38, 11003.73, 7632.137, 7231.843, 8373.843, 7679.079, 9947.97, 9212.367, 8485.144, 7686.02]}, "pk_size_bytes": {"n": 10, "mean": 2592.0, "median": 2592.0, "std": 0.0, "min": 2592.0, "max": 2592.0, "raw": [2592.0, 2592.0, 2592.0, 2592.0, 2592.0, 2592.0, 2592.0, 2592.0, 2592.0, 2592.0]}, "sig_size_bytes": {"n": 10, "mean": 4627.0, "median": 4627.0, "std": 0.0, "min": 4627.0, "max": 4627.0, "raw": [4627.0, 4627.0, 4627.0, 4627.0, 4627.0, 4627.0, 4627.0, 4627.0, 4627.0, 4627.0]}, "heap_keygen_used": {"n": 10, "mean": 12733.6, "median": 12732.0, "std": 3.3730961708462712, "min": 12732.0, "max": 12740.0, "raw": [12740.0, 12740.0, 12732.0, 12732.0, 12732.0, 12732.0, 12732.0, 12732.0, 12732.0, 12732.0]}, "heap_sign_used": {"n": 10, "mean": -0.8, "median": 0.0, "std": 2.5298221281347035, "min": -8.0, "max": 0.0, "raw": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -8.0, 0.0, 0.0, 0.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 135.73660890876894, "median": 136.48362389548993, "std": 9.606140481087284, "min": 118.91824822817853, "max": 149.39457318442874, "raw": [118.9182, 123.6043, 136.8723, 132.2148, 138.8693, 142.0046, 149.3946, 131.9627, 136.095, 147.4304]}, "net_energy_sign_mj": {"n": 10, "mean": 203.86028476630418, "median": 185.46865695191275, "std": 64.10598389369181, "min": 137.94185910947795, "max": 336.23886447318364, "raw": [147.2633, 336.2389, 155.503, 137.9419, 206.7996, 164.409, 279.4346, 240.0754, 197.9318, 173.0055]}, "net_energy_verify_mj": {"n": 10, "mean": 129.8458028733682, "median": 130.11701013767004, "std": 8.532786098807781, "min": 119.54901304468217, "max": 147.15514433916928, "raw": [120.9848, 123.3217, 128.9306, 131.3034, 134.5907, 137.2855, 119.549, 123.2952, 132.0419, 147.1551]}}}, "ML-DSA-65": {"family": "ML-DSA", "trials": 10, "ok": 10, "metrics": {"keygen_time_ms": {"n": 10, "mean": 1400.7658999999999, "median": 1400.119, "std": 2.481130855521729, "min": 1398.073, "max": 1405.11, "raw": [1404.801, 1400.12, 1405.11, 1400.118, 1402.038, 1398.616, 1399.817, 1400.413, 1398.553, 1398.073]}, "sign_time_ms": {"n": 10, "mean": 2769.1209000000003, "median": 2247.741, "std": 2000.8130598051303, "min": 1628.346, "max": 8321.878, "raw": [2379.214, 2124.95, 2370.532, 3112.38, 1877.979, 8321.878, 1874.24, 2372.108, 1628.346, 1629.582]}, "verify_time_ms": {"n": 10, "mean": 1295.4818, "median": 1294.9470000000001, "std": 1.9796047192417998, "min": 1294.019, "max": 1300.646, "raw": [1294.095, 1294.83, 1300.646, 1294.019, 1294.217, 1296.794, 1295.215, 1295.011, 1294.883, 1295.108]}, "server_verify_time_ms": {"n": 10, "mean": 0.19757, "median": 0.1907, "std": 0.15154261630167126, "min": 0.049, "max": 0.5813, "raw": [0.1597, 0.0517, 0.2189, 0.1952, 0.1862, 0.2267, 0.2218, 0.5813, 0.0852, 0.049]}, "network_rtt_ms": {"n": 10, "mean": 5524.8799, "median": 4995.822, "std": 2002.1842655151204, "min": 4365.789, "max": 11073.222, "raw": [5164.985, 4873.893, 5117.751, 5898.691, 4632.191, 11073.222, 4633.408, 5120.255, 4368.614, 4365.789]}, "pk_size_bytes": {"n": 10, "mean": 1952.0, "median": 1952.0, "std": 0.0, "min": 1952.0, "max": 1952.0, "raw": [1952.0, 1952.0, 1952.0, 1952.0, 1952.0, 1952.0, 1952.0, 1952.0, 1952.0, 1952.0]}, "sig_size_bytes": {"n": 10, "mean": 3309.0, "median": 3309.0, "std": 0.0, "min": 3309.0, "max": 3309.0, "raw": [3309.0, 3309.0, 3309.0, 3309.0, 3309.0, 3309.0, 3309.0, 3309.0, 3309.0, 3309.0]}, "heap_keygen_used": {"n": 10, "mean": 9477.6, "median": 9480.0, "std": 5.059644256269407, "min": 9468.0, "max": 9480.0, "raw": [9480.0, 9480.0, 9480.0, 9480.0, 9480.0, 9480.0, 9480.0, 9480.0, 9468.0, 9468.0]}, "heap_sign_used": {"n": 10, "mean": -0.8, "median": 0.0, "std": 2.5298221281347035, "min": -8.0, "max": 0.0, "raw": [-8.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, "net_energy_keygen_mj": {"n": 10, "mean": 82.38063455463309, "median": 83.94170698969515, "std": 5.1095751716080455, "min": 72.5394594729771, "max": 87.87678032941005, "raw": [72.5395, 75.541, 79.8447, 81.5279, 82.5903, 85.2931, 85.3497, 86.0472, 87.1962, 87.8768]}, "net_energy_sign_mj": {"n": 10, "mean": 166.56346170235582, "median": 122.85448777181114, "std": 124.97777361392804, "min": 102.92100526378431, "max": 515.5741958799326, "raw": [127.6521, 118.0568, 136.676, 183.8163, 112.3131, 515.5742, 117.8859, 147.1842, 102.921, 103.5549]}, "net_energy_verify_mj": {"n": 10, "mean": 76.6258878900525, "median": 77.7899644194391, "std": 4.136029588764978, "min": 70.13643968559222, "max": 81.73665186573123, "raw": [70.1364, 70.6627, 73.2212, 75.3032, 76.7092, 78.8707, 79.6323, 79.8148, 81.7367, 80.1716]}}}, "SLH-DSA-SHAKE-128s": {"family": "SLH-DSA", "trials": 1, "ok": 1, "metrics": {"keygen_time_ms": {"n": 1, "mean": 36435.235, "median": 36435.235, "std": 0.0, "min": 36435.235, "max": 36435.235, "raw": [36435.235]}, "sign_time_ms": {"n": 1, "mean": 277785.324, "median": 277785.324, "std": 0.0, "min": 277785.324, "max": 277785.324, "raw": [277785.324]}, "verify_time_ms": {"n": 1, "mean": 265.643, "median": 265.643, "std": 0.0, "min": 265.643, "max": 265.643, "raw": [265.643]}, "server_verify_time_ms": {"n": 1, "mean": 3.5424, "median": 3.5424, "std": 0.0, "min": 3.5424, "max": 3.5424, "raw": [3.5424]}, "network_rtt_ms": {"n": 1, "mean": 314962.092, "median": 314962.092, "std": 0.0, "min": 314962.092, "max": 314962.092, "raw": [314962.092]}, "pk_size_bytes": {"n": 1, "mean": 32.0, "median": 32.0, "std": 0.0, "min": 32.0, "max": 32.0, "raw": [32.0]}, "sig_size_bytes": {"n": 1, "mean": 7856.0, "median": 7856.0, "std": 0.0, "min": 7856.0, "max": 7856.0, "raw": [7856.0]}, "heap_keygen_used": {"n": 1, "mean": 7852.0, "median": 7852.0, "std": 0.0, "min": 7852.0, "max": 7852.0, "raw": [7852.0]}, "heap_sign_used": {"n": 1, "mean": -28.0, "median": -28.0, "std": 0.0, "min": -28.0, "max": -28.0, "raw": [-28.0]}, "net_energy_keygen_mj": {"n": 1, "mean": 5115.472060565535, "median": 5115.472060565535, "std": 0.0, "min": 5115.472060565535, "max": 5115.472060565535, "raw": [5115.4721]}, "net_energy_sign_mj": {"n": 1, "mean": 40954.57990882249, "median": 40954.57990882249, "std": 0.0, "min": 40954.57990882249, "max": 40954.57990882249, "raw": [40954.5799]}, "net_energy_verify_mj": {"n": 1, "mean": 39.47882046857879, "median": 39.47882046857879, "std": 0.0, "min": 39.47882046857879, "max": 39.47882046857879, "raw": [39.4788]}}}, "SLH-DSA-SHAKE-192s": {"family": "SLH-DSA", "trials": 1, "ok": 1, "metrics": {"keygen_time_ms": {"n": 1, "mean": 53296.931, "median": 53296.931, "std": 0.0, "min": 53296.931, "max": 53296.931, "raw": [53296.931]}, "sign_time_ms": {"n": 1, "mean": 485271.066, "median": 485271.066, "std": 0.0, "min": 485271.066, "max": 485271.066, "raw": [485271.066]}, "verify_time_ms": {"n": 1, "mean": 384.215, "median": 384.215, "std": 0.0, "min": 384.215, "max": 384.215, "raw": [384.215]}, "server_verify_time_ms": {"n": 1, "mean": 3.9516, "median": 3.9516, "std": 0.0, "min": 3.9516, "max": 3.9516, "raw": [3.9516]}, "network_rtt_ms": {"n": 1, "mean": 539098.21, "median": 539098.21, "std": 0.0, "min": 539098.21, "max": 539098.21, "raw": [539098.21]}, "pk_size_bytes": {"n": 1, "mean": 48.0, "median": 48.0, "std": 0.0, "min": 48.0, "max": 48.0, "raw": [48.0]}, "sig_size_bytes": {"n": 1, "mean": 16224.0, "median": 16224.0, "std": 0.0, "min": 16224.0, "max": 16224.0, "raw": [16224.0]}, "heap_keygen_used": {"n": 1, "mean": 15888.0, "median": 15888.0, "std": 0.0, "min": 15888.0, "max": 15888.0, "raw": [15888.0]}, "heap_sign_used": {"n": 1, "mean": -336.0, "median": -336.0, "std": 0.0, "min": -336.0, "max": -336.0, "raw": [-336.0]}, "net_energy_keygen_mj": {"n": 1, "mean": 7150.738446195668, "median": 7150.738446195668, "std": 0.0, "min": 7150.738446195668, "max": 7150.738446195668, "raw": [7150.7384]}, "net_energy_sign_mj": {"n": 1, "mean": 62288.153363780235, "median": 62288.153363780235, "std": 0.0, "min": 62288.153363780235, "max": 62288.153363780235, "raw": [62288.1534]}, "net_energy_verify_mj": {"n": 1, "mean": 39.5899855002346, "median": 39.5899855002346, "std": 0.0, "min": 39.5899855002346, "max": 39.5899855002346, "raw": [39.59]}}}, "SLH-DSA-SHAKE-256s": {"family": "SLH-DSA", "trials": 1, "ok": 1, "metrics": {"keygen_time_ms": {"n": 1, "mean": 35168.788, "median": 35168.788, "std": 0.0, "min": 35168.788, "max": 35168.788, "raw": [35168.788]}, "sign_time_ms": {"n": 1, "mean": 428601.385, "median": 428601.385, "std": 0.0, "min": 428601.385, "max": 428601.385, "raw": [428601.385]}, "verify_time_ms": {"n": 1, "mean": 596.374, "median": 596.374, "std": 0.0, "min": 596.374, "max": 596.374, "raw": [596.374]}, "server_verify_time_ms": {"n": 1, "mean": 4.273, "median": 4.273, "std": 0.0, "min": 4.273, "max": 4.273, "raw": [4.273]}, "network_rtt_ms": {"n": 1, "mean": 464597.342, "median": 464597.342, "std": 0.0, "min": 464597.342, "max": 464597.342, "raw": [464597.342]}, "pk_size_bytes": {"n": 1, "mean": 64.0, "median": 64.0, "std": 0.0, "min": 64.0, "max": 64.0, "raw": [64.0]}, "sig_size_bytes": {"n": 1, "mean": 29792.0, "median": 29792.0, "std": 0.0, "min": 29792.0, "max": 29792.0, "raw": [29792.0]}, "heap_keygen_used": {"n": 1, "mean": 30924.0, "median": 30924.0, "std": 0.0, "min": 30924.0, "max": 30924.0, "raw": [30924.0]}, "heap_sign_used": {"n": 1, "mean": -212.0, "median": -212.0, "std": 0.0, "min": -212.0, "max": -212.0, "raw": [-212.0]}, "net_energy_keygen_mj": {"n": 1, "mean": 4180.03876172615, "median": 4180.03876172615, "std": 0.0, "min": 4180.03876172615, "max": 4180.03876172615, "raw": [4180.0388]}, "net_energy_sign_mj": {"n": 1, "mean": 51739.573302122, "median": 51739.573302122, "std": 0.0, "min": 51739.573302122, "max": 51739.573302122, "raw": [51739.5733]}, "net_energy_verify_mj": {"n": 1, "mean": 74.29843735526754, "median": 74.29843735526754, "std": 0.0, "min": 74.29843735526754, "max": 74.29843735526754, "raw": [74.2984]}}}}, "source": "ESP32", "generated": "07 Nov 2026 09:24", "energy_demo": false};
+const A = D.algos;
+const $ = id => document.getElementById(id);
+const M = (n, k) => A[n] && A[n].metrics[k];
+const dec = (v, d) => v.toFixed(d).replace(".", ",");
+const fmt = v => v >= 1000 ? Math.round(v).toLocaleString("id-ID") : v >= 100 ? dec(v, 0) : v >= 10 ? dec(v, 1) : v >= 0.1 ? dec(v, 2) : String(+v.toPrecision(2)).replace(".", ",");
+const tf = v => v >= 1000 ? v.toLocaleString("id-ID") : String(+v.toPrecision(3)).replace(".", ",");
+const hum = v => v >= 60000 ? dec(v / 60000, 1) + " menit" : v >= 1000 ? dec(v / 1000, 2) + " detik" : fmt(v) + " ms";
+const short = n => n.replace("SLH-DSA-SHAKE-", "SLH-");
+
+const TABS = {
+  kem: { title: "Key Establishment", fam: ["ML-KEM", "HQC"],
+    levels: ["Level 1", "Level 3", "Level 5"],
+    pairs: [["ML-KEM-512", "HQC-1"], ["ML-KEM-768", "HQC-3"], ["ML-KEM-1024", "HQC-5"]],
+    cpu: ["keygen_time_ms", "encaps_time_ms", "decaps_time_ms"], size: ["pk_size_bytes", "ct_size_bytes"],
+    cpuL: "KeyGen + Encaps + Decaps", sizeL: "public key + ciphertext",
+    metrics: [
+      { k: "keygen_time_ms", l: "Waktu KeyGen", u: "ms", w: "diukur di ESP32" },
+      { k: "decaps_time_ms", l: "Waktu Decaps", u: "ms", w: "diukur di ESP32" },
+      { k: "encaps_time_ms", l: "Waktu Encaps", u: "ms", w: "diukur di ESP32 (ronde 2)" },
+      { k: "server_encaps_time_ms", l: "Waktu Encaps (server, pembanding)", u: "ms", w: "diukur di server PC" },
+      { k: "network_rtt_ms", l: "Total waktu 1 siklus (RTT)", u: "ms", w: "ESP32 ↔ server" },
+      { k: "pk_size_bytes", l: "Ukuran public key", u: "byte", w: "ukuran data" },
+      { k: "ct_size_bytes", l: "Ukuran ciphertext", u: "byte", w: "ukuran data" },
+      { k: "heap_keygen_used", l: "Heap terpakai saat KeyGen", u: "byte", w: "diukur di ESP32" },
+      { k: "heap_decaps_used", l: "Heap terpakai saat Decaps", u: "byte", w: "diukur di ESP32" },
+      { k: "heap_encaps_used", l: "Heap terpakai saat Encaps", u: "byte", w: "diukur di ESP32" },
+      { k: "net_energy_keygen_mj", l: "Energi bersih KeyGen", u: "mJ", w: "INA219 dikurangi daya idle" },
+      { k: "net_energy_encaps_mj", l: "Energi bersih Encaps", u: "mJ", w: "INA219 dikurangi daya idle" },
+      { k: "net_energy_decaps_mj", l: "Energi bersih Decaps", u: "mJ", w: "INA219 dikurangi daya idle" } ] },
+  sig: { title: "Digital Signature", fam: ["ML-DSA", "SLH-DSA"],
+    levels: ["44 ↔ 128s", "65 ↔ 192s", "87 ↔ 256s"],
+    pairs: [["ML-DSA-44", "SLH-DSA-SHAKE-128s"], ["ML-DSA-65", "SLH-DSA-SHAKE-192s"], ["ML-DSA-87", "SLH-DSA-SHAKE-256s"]],
+    cpu: ["keygen_time_ms", "sign_time_ms", "verify_time_ms"], size: ["pk_size_bytes", "sig_size_bytes"],
+    cpuL: "KeyGen + Sign + Verify", sizeL: "public key + signature",
+    metrics: [
+      { k: "keygen_time_ms", l: "Waktu KeyGen", u: "ms", w: "diukur di ESP32" },
+      { k: "sign_time_ms", l: "Waktu Sign", u: "ms", w: "diukur di ESP32" },
+      { k: "verify_time_ms", l: "Waktu Verify (lokal)", u: "ms", w: "diukur di ESP32" },
+      { k: "server_verify_time_ms", l: "Waktu Verify (server)", u: "ms", w: "diukur di server PC" },
+      { k: "network_rtt_ms", l: "Total waktu 1 siklus (RTT)", u: "ms", w: "ESP32 ↔ server" },
+      { k: "pk_size_bytes", l: "Ukuran public key", u: "byte", w: "ukuran data" },
+      { k: "sig_size_bytes", l: "Ukuran signature", u: "byte", w: "ukuran data" },
+      { k: "heap_keygen_used", l: "Heap terpakai saat KeyGen", u: "byte", w: "diukur di ESP32" },
+      { k: "heap_sign_used", l: "Heap terpakai saat Sign", u: "byte", w: "diukur di ESP32" },
+      { k: "net_energy_keygen_mj", l: "Energi bersih KeyGen", u: "mJ", w: "INA219 dikurangi daya idle" },
+      { k: "net_energy_sign_mj", l: "Energi bersih Sign", u: "mJ", w: "INA219 dikurangi daya idle" },
+      { k: "net_energy_verify_mj", l: "Energi bersih Verify", u: "mJ", w: "INA219 dikurangi daya idle" } ] }
+};
+let tab = "kem", cur = [], mode = "mean";
+
+const val = s => mode === "mean" ? s.mean : s.median;
+const wlo = s => mode === "mean" ? Math.max(s.mean - s.std, 0) : s.min;
+const whi = s => mode === "mean" ? s.mean + s.std : s.max;
+const avail = T => T.metrics.filter(m => T.pairs.flat().some(n => M(n, m.k)));
+const fam = (T, n) => Math.max(0, T.fam.indexOf(A[n].family));
+const colr = i => i ? "var(--b)" : "var(--a)";
+
+function scale(vals, log, Tp, ph) {
+  const mx = Math.max(...vals) * 1.12;
+  let lo = 0, hi = mx, ticks = [];
+  if (log) {
+    const mn = Math.min(...vals.filter(v => v > 0));
+    lo = Math.pow(10, Math.floor(Math.log10(mn)));
+    hi = Math.pow(10, Math.ceil(Math.log10(mx)));
+    if (hi <= lo) hi = lo * 10;
+    for (let e = Math.round(Math.log10(lo)); e <= Math.round(Math.log10(hi)); e++) ticks.push(Math.pow(10, e));
+  } else {
+    const raw = mx / 5, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const st = [1, 2, 2.5, 5, 10].find(x => x * mag >= raw) * mag;
+    hi = Math.ceil(mx / st) * st;
+    for (let v = 0; v <= hi + 1e-9; v += st) ticks.push(v);
+  }
+  const Y = v => log
+    ? Tp + ph * (1 - (Math.log(Math.max(v, lo)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)))
+    : Tp + ph * (1 - v / hi);
+  return { Y, ticks };
+}
+
+const tipFor = (n, m) => {
+  const s = M(n, m.k);
+  const h = m.u === "ms" && s.mean >= 1000 ? " (≈ " + hum(s.mean) + ")" : "";
+  return `<b>${n}</b><br>rata-rata ${fmt(s.mean)} ± ${fmt(s.std)} ${m.u}${h}<br>median ${fmt(s.median)} · min ${fmt(s.min)} · maks ${fmt(s.max)}<br>${s.n} trial`;
+};
+
+function barChart(T, m, log) {
+  const W = 920, H = 400, L = 72, R = 16, Tp = 26, B = 60, pw = W - L - R, ph = H - Tp - B;
+  const all = [];
+  T.pairs.flat().forEach(n => { const s = M(n, m.k); if (s) { all.push(val(s), whi(s)); } });
+  const sc = scale(all.filter(v => v > 0), log, Tp, ph), Y = sc.Y, base = Tp + ph;
+  let s = `<svg viewBox="0 0 ${W} ${H}">`;
+  sc.ticks.forEach(t => {
+    const y = Y(t);
+    s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L - 8}" y="${y + 4}" text-anchor="end">${tf(t)}</text>`;
+  });
+  s += `<text transform="translate(16 ${Tp + ph / 2}) rotate(-90)" text-anchor="middle">${m.u}${log ? " (skala log)" : ""}</text>`;
+  const gw = pw / T.pairs.length, bw = Math.min(74, gw / 3.2);
+  T.pairs.forEach((p, i) => {
+    const x0 = L + gw * i + gw / 2;
+    p.forEach((n, j) => {
+      const bx = j === 0 ? x0 - bw - 4 : x0 + 4, st = M(n, m.k);
+      if (!st) { s += `<text x="${bx + bw / 2}" y="${base - 6}" text-anchor="middle">n/a</text>`; return; }
+      const v = val(st), y = Y(v);
+      s += `<rect class="hov" data-tip="${tipFor(n, m)}" x="${bx}" y="${y}" width="${bw}" height="${Math.max(base - y, 1)}" rx="3" style="fill:${colr(j)}"/>`;
+      let labY = y - 6;
+      const hiV = whi(st), loV = wlo(st);
+      if (hiV > loV) {
+        const yt = Y(hiV), yb = Y(loV), cx = bx + bw / 2;
+        s += `<g stroke="var(--ink)" stroke-width="1.4" opacity=".7" pointer-events="none"><line x1="${cx}" x2="${cx}" y1="${yt}" y2="${yb}"/><line x1="${cx - 5}" x2="${cx + 5}" y1="${yt}" y2="${yt}"/><line x1="${cx - 5}" x2="${cx + 5}" y1="${yb}" y2="${yb}"/></g>`;
+        labY = Math.min(labY, yt - 6);
+      }
+      s += `<text class="val" x="${bx + bw / 2}" y="${labY}" text-anchor="middle">${fmt(v)}</text>`;
+    });
+    s += `<text class="lbl" x="${x0}" y="${base + 20}" text-anchor="middle" style="font-weight:600">${T.levels[i]}</text>`;
+    s += `<text x="${x0}" y="${base + 37}" text-anchor="middle">${p[0]} vs ${short(p[1])}</text>`;
+  });
+  return s + "</svg>";
+}
+
+function cmpCards(T, m) {
+  const out = [];
+  T.pairs.forEach((p, i) => {
+    const a = M(p[0], m.k), b = M(p[1], m.k);
+    if (!a || !b) return;
+    const va = val(a), vb = val(b);
+    if (va <= 0 || vb <= 0) return;
+    const r = va / vb, x = r <= 1 ? 1 / r : r, low = r <= 1 ? 0 : 1;
+    const head = x < 1.05 ? "≈ setara" : dec(x, 1) + "×";
+    const body = x < 1.05 ? `${p[0]} ≈ ${p[1]}`
+      : `<i class="dot" style="background:${colr(low)}"></i>${p[low]} lebih rendah dari ${p[1 - low]}`;
+    out.push(`<div class="cmp"><span class="lv">${T.levels[i]}</span><b>${head}</b><span class="tx">${body}</span></div>`);
+  });
+  return out.join("");
+}
+
+function stripChart(T, m, log) {
+  const names = T.pairs.flat().filter(n => M(n, m.k));
+  const W = 920, H = 300, L = 72, R = 16, Tp = 16, B = 56, pw = W - L - R, ph = H - Tp - B;
+  const all = [];
+  names.forEach(n => M(n, m.k).raw.forEach(v => all.push(v)));
+  const sc = scale(all.filter(v => v > 0), log, Tp, ph), Y = sc.Y, base = Tp + ph;
+  let s = `<svg viewBox="0 0 ${W} ${H}">`;
+  sc.ticks.forEach(t => {
+    const y = Y(t);
+    s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L - 8}" y="${y + 4}" text-anchor="end">${tf(t)}</text>`;
+  });
+  s += `<text transform="translate(16 ${Tp + ph / 2}) rotate(-90)" text-anchor="middle">${m.u}${log ? " (skala log)" : ""}</text>`;
+  const gw = pw / names.length;
+  names.forEach((n, i) => {
+    const st = M(n, m.k), cx = L + gw * i + gw / 2, c = colr(fam(T, n));
+    st.raw.forEach((v, j) => {
+      const jx = ((j * 37) % 11 - 5) * Math.min(5, gw / 24);
+      s += `<circle class="hov" data-tip="<b>${n}</b><br>trial ke-${j + 1}: ${fmt(v)} ${m.u}" cx="${cx + jx}" cy="${Y(v)}" r="4.5" style="fill:${c}" opacity=".75"/>`;
+    });
+    const ym = Y(st.median);
+    s += `<line x1="${cx - 22}" x2="${cx + 22}" y1="${ym}" y2="${ym}" stroke="var(--ink)" stroke-width="2" pointer-events="none"/>`;
+    s += `<text x="${cx}" y="${base + 20}" text-anchor="middle" class="lbl" style="font-size:11.5px">${short(n)}</text>`;
+  });
+  return s + "</svg>";
+}
+
+function scatterChart(T) {
+  const names = T.pairs.flat().filter(n => {
+    return T.cpu.every(k => M(n, k)) && T.size.every(k => M(n, k));
+  });
+  if (!names.length) return '<p class="mut">Data belum lengkap untuk grafik ini.</p>';
+  const P = names.map(n => ({
+    n, f: fam(T, n),
+    x: T.size.reduce((a, k) => a + val(M(n, k)), 0),
+    y: T.cpu.reduce((a, k) => a + val(M(n, k)), 0)
+  }));
+  const W = 920, H = 380, L = 72, R = 24, Tp = 16, B = 52, pw = W - L - R, ph = H - Tp - B;
+  const sy = scale(P.map(p => p.y), true, Tp, ph), sx = scale(P.map(p => p.x), true, 0, pw);
+  const X = v => L + pw - sx.Y(v), Y = sy.Y;
+  let s = `<svg viewBox="0 0 ${W} ${H}">`;
+  sy.ticks.forEach(t => { const y = Y(t); s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L - 8}" y="${y + 4}" text-anchor="end">${tf(t)}</text>`; });
+  sx.ticks.forEach(t => { const x = X(t); s += `<line y1="${Tp}" y2="${Tp + ph}" x1="${x}" x2="${x}" stroke="var(--line)"/><text x="${x}" y="${Tp + ph + 18}" text-anchor="middle">${tf(t)}</text>`; });
+  s += `<text transform="translate(16 ${Tp + ph / 2}) rotate(-90)" text-anchor="middle">waktu komputasi, ms (${T.cpuL})</text>`;
+  s += `<text x="${L + pw / 2}" y="${H - 8}" text-anchor="middle">data dikirim lewat jaringan, byte (${T.sizeL})</text>`;
+  P.forEach(p => {
+    const x = X(p.x), y = Y(p.y), left = x > W - 150;
+    const extra = p.y >= 1000 ? " (≈ " + hum(p.y) + ")" : "";
+    s += `<circle class="hov" data-tip="<b>${p.n}</b><br>waktu ${fmt(p.y)} ms${extra}<br>data ${fmt(p.x)} byte" cx="${x}" cy="${y}" r="8" style="fill:${colr(p.f)}" opacity=".85"/>`;
+    s += `<text class="lbl" x="${left ? x - 12 : x + 12}" y="${y + 4}" text-anchor="${left ? "end" : "start"}" style="font-size:11.5px" pointer-events="none">${short(p.n)}</text>`;
+  });
+  return s + "</svg>";
+}
+
+function render() {
+  const T = TABS[tab], m = cur[+$("metric").value];
+  $("scNote").textContent = "Makin ke kiri-bawah, makin ringan di waktu dan di jaringan. Kedua sumbu berskala logaritmik.";
+  $("scatter").innerHTML = scatterChart(T);
+  if (!m) {
+    $("chart").innerHTML = '<p class="mut">Belum ada data untuk kelompok ini pada database yang dimuat.</p>';
+    $("cmp").innerHTML = ""; $("strip").innerHTML = ""; $("tbl").innerHTML = ""; $("where").textContent = ""; $("legend").innerHTML = "";
+    return;
+  }
+  const log = $("log").checked;
+  $("where").textContent = m.w;
+  $("legend").innerHTML = T.fam.map((f, i) => `<span><i style="background:${colr(i)}"></i>${f}</span>`).join("");
+  $("chart").innerHTML = barChart(T, m, log);
+  const neg = m.k.indexOf("net_energy") === 0 ? T.pairs.flat().filter(n => M(n, m.k) && M(n, m.k).mean <= 0) : [];
+  $("enote").innerHTML = neg.length ? `<p class="hint">Energi bersih &le; 0 pada: ${neg.join(", ")}. Operasi terlalu singkat untuk dibedakan dari daya idle; perbanyak pengulangan di firmware.</p>` : "";
+  $("cmp").innerHTML = cmpCards(T, m);
+  $("strip").innerHTML = stripChart(T, m, log);
+  const rows = T.pairs.flat().filter(n => A[n]).map(n => {
+    const a = A[n], s = M(n, m.k), c = f => s ? fmt(s[f]) : "–";
+    return `<tr><td>${n}</td><td>${a.family}</td><td>${a.ok}/${a.trials}</td><td>${c("mean")}</td><td>${c("std")}</td><td>${c("median")}</td><td>${c("min")}</td><td>${c("max")}</td></tr>`;
+  }).join("");
+  $("tbl").innerHTML = `<tr><th>Algoritma</th><th>Keluarga</th><th>Trial sukses</th><th>Mean (${m.u})</th><th>Std</th><th>Median</th><th>Min</th><th>Maks</th></tr>${rows}`;
+}
+
+function autoLog() {
+  const T = TABS[tab], m = cur[+$("metric").value];
+  if (!m) return;
+  const v = T.pairs.flat().map(n => M(n, m.k)).filter(Boolean).map(s => s.mean).filter(x => x > 0);
+  $("log").checked = v.length > 1 && Math.max(...v) / Math.min(...v) > 30;
+}
+
+function setTab(t) {
+  tab = t;
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.t === t));
+  cur = avail(TABS[t]);
+  $("metric").innerHTML = cur.map((m, i) => `<option value="${i}">${m.l}</option>`).join("");
+  autoLog(); render();
+}
+
+function downloadCSV() {
+  const rows = [["algoritma", "keluarga", "trial_sukses", "trial_total", "metrik", "mean", "std", "median", "min", "maks"]];
+  Object.keys(A).sort().forEach(n => {
+    const a = A[n];
+    Object.entries(a.metrics).forEach(([k, s]) => rows.push([n, a.family, a.ok, a.trials, k, s.mean, s.std, s.median, s.min, s.max]));
+  });
+  const blob = new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv" });
+  const l = document.createElement("a");
+  l.href = URL.createObjectURL(blob); l.download = "benchmark_pqc.csv"; l.click();
+}
+
+(function init() {
+  const all = Object.values(A), ok = all.reduce((s, a) => s + a.ok, 0), tot = all.reduce((s, a) => s + a.trials, 0);
+  $("cards").innerHTML = [[tot, "total trial"], [all.length, "algoritma diuji"],
+    [(100 * ok / tot).toFixed(1).replace(".", ",") + "%", "success rate"], [D.source, "sumber data"],
+    [D.energy_demo ? "DEMO" : (Object.values(A).some(a => Object.keys(a.metrics).some(k => k.indexOf("net_energy") === 0)) ? "INA219" : "belum ada"), "data energi"]]
+    .map(c => `<div class="card"><b>${c[0]}</b><span>${c[1]}</span></div>`).join("");
+  if (D.source !== "ESP32")
+    $("banner").innerHTML = '<div class="banner"><b>Data simulasi PC.</b> Angka di sini bukan hasil ESP32 (jauh lebih cepat). Gunakan untuk memeriksa tampilan saja; data asli akan menggantikannya setelah hardware diuji.</div>';
+  $("tabs").innerHTML = Object.entries(TABS).map(([k, T]) => `<button class="tab" data-t="${k}">${T.title}</button>`).join("");
+  if (D.energy_demo)
+    $("banner").innerHTML += '<div class="banner" style="background:#fde2e2;color:#7a1212;border-color:#e5a3a3"><b>ENERGI DEMO (sintetis).</b> Kolom energi dibuat otomatis hanya untuk melihat bentuk tampilan. Bukan hasil pengukuran INA219.</div>';
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => setTab(b.dataset.t));
+  $("metric").onchange = () => { autoLog(); render(); };
+  $("mode").onchange = () => { mode = $("mode").value; render(); };
+  $("log").onchange = render;
+  $("csv").onclick = downloadCSV;
+  $("gen").textContent = D.generated;
+  const tip = $("tip");
+  document.addEventListener("mousemove", e => {
+    const t = e.target.dataset && e.target.dataset.tip;
+    if (!t) { tip.style.display = "none"; return; }
+    tip.innerHTML = t; tip.style.display = "block";
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 230) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+  });
+  setTab("kem");
+})();
+</script></body></html>

@@ -1,0 +1,10 @@
+menu "Example Configuration"
+
+    config SERVER_SIDE
+        bool "Is server side"
+        default n
+        help
+            Set to true to configure the project as server.
+            false -> client
+
+endmenu

@@ -1,0 +1,8 @@
+[0;32mI (6261) STACK: pqc_task stack=65536 -> OK free=160856 largest=110592[0m
+HQC vect_mul: malloc gagal (129744 B)
+[1;31mE (6751) PQC_MAIN: Trial 1 [HQC-5]: KeyGen gagal rc=-2 free=134672 largest=110592 min=115656[0m
+HQC vect_mul: malloc gagal (129744 B)
+[1;31mE (7241) PQC_MAIN: Trial 1 [HQC-5]: KeyGen gagal rc=-2 free=134460 largest=110592 min=115516[0m
+HQC vect_mul: malloc gagal (129744 B)
+[1;31mE (7751) PQC_MAIN: Trial 1 [HQC-5]: KeyGen gagal rc=-2 free=134248 largest=110592 min=115264[0m
+[0;32mI (7961) PQC_MAIN: HQC-5 selesai: 0/1 sukses[0m

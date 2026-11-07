@@ -1,0 +1,6 @@
+algorithm,total_trials,success_count,success_rate_pct
+ML-KEM-512,10,10,100.0
+HQC-1,10,10,100.0
+ML-KEM-768,10,10,100.0
+HQC-3,10,10,100.0
+ML-KEM-1024,10,10,100.0

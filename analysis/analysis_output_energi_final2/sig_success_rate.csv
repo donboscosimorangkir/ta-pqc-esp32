@@ -1,0 +1,7 @@
+algorithm,total_trials,success_count,success_rate_pct
+ML-DSA-44,10,10,100.0
+SLH-DSA-SHAKE-128s,1,1,100.0
+ML-DSA-65,10,10,100.0
+SLH-DSA-SHAKE-192s,1,1,100.0
+ML-DSA-87,10,10,100.0
+SLH-DSA-SHAKE-256s,1,1,100.0

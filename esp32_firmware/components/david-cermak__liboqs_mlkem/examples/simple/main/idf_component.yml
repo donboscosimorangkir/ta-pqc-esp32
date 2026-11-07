@@ -1,0 +1,5 @@
+dependencies:
+  david-cermak/liboqs_mlkem:
+    version: '*'
+  idf:
+    version: '>=4.1.0'

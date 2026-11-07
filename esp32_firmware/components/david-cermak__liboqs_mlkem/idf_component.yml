@@ -1,0 +1,5 @@
+dependencies:
+  idf: '>=5.2'
+description: The component provides MLKEM implementation using liboqs
+url: https://github.com/david-cermak/upqc-lab/components/liboqs_mlkem
+version: 0.1.0
