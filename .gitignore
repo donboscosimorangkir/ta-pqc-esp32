@@ -45,3 +45,7 @@ analysis/analysis_output*/
 Thumbs.db
 .vscode/
 .idea/
+
+# File lokal yang tidak diunggah
+analysis/jalankan_energi.sh
+host_test_slhdsa/test_slhdsa
